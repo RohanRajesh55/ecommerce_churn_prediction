@@ -8,3 +8,4 @@ streamlit
 flask
 plotly
 openpyxl
+imbalanced-learn
