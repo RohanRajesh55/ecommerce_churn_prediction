@@ -1,0 +1,33 @@
+data:
+  raw_path: "data/raw/E Commerce Dataset.xlsx"
+  processed_path: "data/processed/preprocessed_data.csv"
+
+model:
+  save_path: "models/pipeline_and_model.pkl"
+
+training:
+  test_size: 0.2
+  random_state: 42
+
+features:
+  numeric_features:
+    - Tenure
+    - WarehouseToHome
+    - HourSpendOnApp
+    - NumberOfDeviceRegistered
+    - OrderAmountHikeFromlastYear
+    - CouponUsed
+    - OrderCount
+    - DaySinceLastOrder
+    - CashbackAmount
+
+  categorical_features:
+    - PreferredLoginDevice
+    - CityTier
+    - PreferredPaymentMode
+    - Gender
+    - PreferedOrderCat
+    - MaritalStatus
+    - Complain
+
+target_column: Churn
