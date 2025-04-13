@@ -3,11 +3,13 @@ from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
-import logging
 import joblib
+import logging
+from typing import List, Union
 
 # Setting up logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO, 
+                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 class Preprocessor:
@@ -15,83 +17,128 @@ class Preprocessor:
     A preprocessing pipeline for numeric and categorical features using scikit-learn.
     Handles missing values, scaling, encoding, and feature extraction.
     """
-    def __init__(self):
-        self.pipeline = None
-        self.numeric_features = []
-        self.categorical_features = []
+    def __init__(self) -> None:
+        self.pipeline: Union[ColumnTransformer, None] = None
+        self.numeric_features: List[str] = []
+        self.categorical_features: List[str] = []
 
-    def build_pipeline(self, numeric_features: list, categorical_features: list):
+    def build_pipeline(self, numeric_features: List[str], categorical_features: List[str]) -> None:
         """
         Build the preprocessing pipeline using ColumnTransformer.
-        This handles imputation, scaling for numeric features, and one-hot encoding for categorical features.
+        This handles imputation and scaling for numeric features and imputing plus one-hot encoding for categorical features.
+
+        Parameters:
+            numeric_features (List[str]): List of numeric column names.
+            categorical_features (List[str]): List of categorical column names.
         """
         self.numeric_features = numeric_features
         self.categorical_features = categorical_features
 
-        # Numeric transformer: Impute missing values with median and scale the data
+        # Numeric transformer: Impute missing values with the median and scale the data.
         numeric_transformer = Pipeline(steps=[
             ('imputer', SimpleImputer(strategy='median')),
             ('scaler', StandardScaler())
         ])
 
-        # Categorical transformer: Impute missing values with the most frequent value and apply one-hot encoding
+        # Categorical transformer: Impute missing values with the most frequent value and apply one-hot encoding.
         categorical_transformer = Pipeline(steps=[
             ('imputer', SimpleImputer(strategy='most_frequent')),
-            ('onehot', OneHotEncoder(handle_unknown='ignore', sparse_output=False))  # Dense output for easier processing
+            ('onehot', OneHotEncoder(handle_unknown='ignore', sparse_output=False))
         ])
 
-        # Combining both transformers in a ColumnTransformer
+        # Combine both transformers in a ColumnTransformer.
         self.pipeline = ColumnTransformer(
             transformers=[
                 ('num', numeric_transformer, numeric_features),
                 ('cat', categorical_transformer, categorical_features)
             ],
-            remainder='drop'  # Drop any other columns not specified
+            remainder='drop'  # Drop columns that are not specified
         )
-        logger.info("Preprocessing pipeline built successfully")
+        logger.info("Preprocessing pipeline built successfully with numeric features: %s and categorical features: %s",
+                    numeric_features, categorical_features)
 
     def preprocess_data(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Apply the preprocessing pipeline to the given DataFrame and return the transformed data.
-        The dataframe is expected to include columns that match the specified numeric and categorical features.
-        """
-        # Drop the 'CustomerID' column or any other column that should not be part of the model features
-        df_clean = df.drop(columns=["CustomerID"], errors='ignore')  # Use errors='ignore' to avoid crashes if column is absent
+        The provided DataFrame should include columns matching the specified numeric and categorical features.
+
+        Parameters:
+            df (pd.DataFrame): The input DataFrame to preprocess.
         
-        # Apply the transformations (fit + transform)
+        Returns:
+            pd.DataFrame: The preprocessed data with correct feature names.
+        
+        Raises:
+            ValueError: If the pipeline has not been built.
+        """
+        if self.pipeline is None:
+            raise ValueError("Preprocessing pipeline has not been built. Please call build_pipeline() first.")
+
+        # Optionally drop columns that should not be transformed (e.g., 'CustomerID').
+        df_clean = df.drop(columns=["CustomerID"], errors='ignore')
+        
+        # Fit the pipeline and transform the data.
         processed_data = self.pipeline.fit_transform(df_clean)
         
-        # Get the feature names after one-hot encoding and scaling
+        # Retrieve feature names generated by the pipeline.
         feature_names = self.get_feature_names()
         
-        # Convert the transformed data back into a DataFrame with appropriate column names
+        logger.info("Data preprocessing complete. Processed data shape: %s", processed_data.shape)
         return pd.DataFrame(processed_data, columns=feature_names)
 
-    def get_feature_names(self) -> list:
+    def get_feature_names(self) -> List[str]:
         """
-        Retrieve output feature names after preprocessing (numeric + one-hot encoded features).
-        """
-        # Get feature names for the categorical features after one-hot encoding
-        cat_features = self.pipeline.named_transformers_['cat'].named_steps['onehot'].get_feature_names_out(self.categorical_features)
-        
-        # Combine the numeric and categorical feature names
-        return self.numeric_features + list(cat_features)
+        Retrieve output feature names after preprocessing (numeric features concatenated with one-hot encoded features).
 
-    def save_pipeline_and_model(self, model, file_path: str):
+        Returns:
+            List[str]: The list of output feature names.
+        
+        Raises:
+            ValueError: If the pipeline has not been built.
         """
-        Save the fitted preprocessing pipeline and model as a joblib file.
-        This will allow for re-use of the model and pipeline in deployment.
+        if self.pipeline is None:
+            raise ValueError("Preprocessing pipeline has not been built. Please call build_pipeline() first.")
+
+        # Numeric feature names remain the same.
+        num_features = self.numeric_features
+
+        # Retrieve feature names for the categorical features after one-hot encoding.
+        cat_transformer = self.pipeline.named_transformers_.get('cat')
+        if cat_transformer is None:
+            raise ValueError("Categorical transformer not found in the pipeline.")
+
+        onehot = cat_transformer.named_steps.get('onehot')
+        if onehot is None:
+            raise ValueError("OneHotEncoder step missing in the categorical transformer.")
+
+        cat_features = onehot.get_feature_names_out(self.categorical_features)
+        return num_features + list(cat_features)
+
+    def save_pipeline_and_model(self, model, file_path: str) -> None:
+        """
+        Save the fitted preprocessing pipeline and the model as a joblib file.
+        This allows for re-use of the preprocessor and model in deployment.
+
+        Parameters:
+            model: The trained model object.
+            file_path (str): The destination file path (e.g., "models/best_model.pkl").
         """
         joblib.dump({'preprocessor': self.pipeline, 'model': model}, file_path)
-        logger.info(f"Saved pipeline and model to {file_path}")
+        logger.info("Saved pipeline and model to %s", file_path)
 
     def load_pipeline_and_model(self, file_path: str):
         """
         Load the preprocessing pipeline and model from a saved joblib file.
         This is useful for deploying the model or making predictions.
+
+        Parameters:
+            file_path (str): The file path to the saved joblib file.
+        
+        Returns:
+            The loaded model.
         """
         data = joblib.load(file_path)
-        self.pipeline = data['preprocessor']
-        model = data['model']
-        logger.info(f"Loaded pipeline and model from {file_path}")
+        self.pipeline = data.get('preprocessor')
+        model = data.get('model')
+        logger.info("Loaded pipeline and model from %s", file_path)
         return model
