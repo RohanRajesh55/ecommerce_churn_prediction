@@ -1,33 +1,15 @@
-data:
-  raw_path: "data/raw/E Commerce Dataset.xlsx"
-  processed_path: "data/processed/preprocessed_data.csv"
+paths:
+  model_output: models/xgb_churn_model.pkl
+  optuna_study_output: models/optuna_study.pkl
 
-model:
-  save_path: "models/pipeline_and_model.pkl"
-
-training:
-  test_size: 0.2
-  random_state: 42
-
-features:
-  numeric_features:
-    - Tenure
-    - WarehouseToHome
-    - HourSpendOnApp
-    - NumberOfDeviceRegistered
-    - OrderAmountHikeFromlastYear
-    - CouponUsed
-    - OrderCount
-    - DaySinceLastOrder
-    - CashbackAmount
-
-  categorical_features:
-    - PreferredLoginDevice
-    - CityTier
-    - PreferredPaymentMode
-    - Gender
-    - PreferedOrderCat
-    - MaritalStatus
-    - Complain
-
-target_column: Churn
+modeling:
+  use_gpu: true
+  xgb_params:
+    n_estimators: 200
+    max_depth: 6
+    learning_rate: 0.05
+    subsample: 0.8
+    colsample_bytree: 0.8
+    gamma: 0
+    reg_alpha: 0
+    reg_lambda: 1

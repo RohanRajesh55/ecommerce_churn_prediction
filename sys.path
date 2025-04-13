@@ -1,0 +1,10 @@
+import sys
+import os
+
+# Specify the absolute path to your project root
+project_root = r"C:\ecommerce_churn_prediction"
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
+print("Project root added to sys.path:", project_root)
+print("Current sys.path:", sys.path)
